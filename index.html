@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Turnero Barbería Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="app.css">
+<style>
+/* Layout: reserva en pasos verticales (servicio, profesional, día, hora, datos) sobre una tarjeta; tira de días deslizable y grilla de horarios */
+.steps{display:flex;flex-direction:column;gap:14px;padding-block:18px 60px}
+.h{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
+.h .n{font-family:var(--f-display);color:var(--accent);font-size:18px}
+.h h2{font-size:20px}
+.opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
+.opt{text-align:left;border:1.5px solid var(--line);background:var(--bg);padding:10px 12px;cursor:pointer}
+.opt b{display:block}
+.opt small{color:var(--muted)}
+.opt[aria-pressed="true"]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--card))}
+.days{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+.day{flex:0 0 auto;width:62px;text-align:center;border:1.5px solid var(--line);background:var(--bg);padding:6px 0;cursor:pointer}
+.day small{display:block;color:var(--muted);font-size:12px;text-transform:uppercase}
+.day b{font-family:var(--f-display);font-size:22px;display:block;line-height:1.1}
+.day[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:#fff}
+.day[aria-pressed="true"] small{color:#fff}
+.day:disabled{opacity:.35;cursor:not-allowed}
+.times{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px}
+.time{border:1.5px solid var(--line);background:var(--bg);padding:8px 0;font-weight:600;cursor:pointer;font-variant-numeric:tabular-nums}
+.time[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:#fff}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:520px){.row2{grid-template-columns:1fr}}
+.ticket{border:2px dashed var(--line);padding:14px;display:grid;grid-template-columns:auto 1fr;gap:4px 14px}
+.ticket dt{color:var(--muted);font-size:14px}.ticket dd{margin:0;font-weight:600}
+.col{display:flex;flex-direction:column;gap:10px}
+.mine .t{display:flex;justify-content:space-between;align-items:center;gap:10px;border-top:1px solid var(--line);padding-top:10px;margin-top:10px;flex-wrap:wrap}
+.err{color:var(--accent);font-weight:600;min-height:1.4em}
+</style>
+</head>
+<body>
+<div class="demo">Demo de turnero · Probá reservar y después mirá el <a href="admin.html">panel del local</a> (PIN 1234)</div>
+<header class="top"><div class="pole"></div><div class="wrap"><div class="brand"><span class="mark" id="ini">B</span><b id="nom">Tu Barbería</b></div><span class="muted" id="dir"></span></div></header>
+
+<main class="wrap steps" id="reserva">
+  <div class="banner" id="demora" hidden></div>
+  <section class="card mine" id="mine" hidden><h2 style="font-size:18px">Tus próximos turnos</h2><div id="mineList"></div></section>
+
+  <section class="card"><div class="h"><span class="n">1</span><h2>Servicio</h2></div><div class="opts" id="srv"></div></section>
+  <section class="card"><div class="h"><span class="n">2</span><h2>Con quién</h2></div><div class="opts" id="bar"></div></section>
+  <section class="card"><div class="h"><span class="n">3</span><h2>Día</h2></div><div class="days" id="days"></div></section>
+  <section class="card"><div class="h"><span class="n">4</span><h2>Horario</h2></div><div class="times" id="times"></div><p class="muted" id="noTimes" hidden style="margin:0">No quedan horarios libres ese día. Probá con otro día o con otro profesional.</p></section>
+  <section class="card col"><div class="h"><span class="n">5</span><h2>Tus datos</h2></div>
+    <div class="row2"><div><label class="l" for="cNom">Nombre</label><input class="field" id="cNom" autocomplete="name"></div>
+    <div><label class="l" for="cTel">Celular</label><input class="field" id="cTel" inputmode="tel" autocomplete="tel" placeholder="351 555 1234"></div></div>
+    <div class="err" id="err" aria-live="polite"></div>
+    <button class="btn primary" id="go" type="button">Reservar turno</button>
+  </section>
+</main>
+
+<main class="wrap steps" id="okView" hidden>
+  <section class="card col">
+    <h2 style="color:var(--ok)">✓ Turno reservado</h2>
+    <dl class="ticket" id="ticket"></dl>
+    <div><b>Que no se te pase:</b> agregalo a tu calendario y el celular te avisa solo.</div>
+    <a class="btn primary" id="acal" hidden>Agregar al calendario del celular</a>
+    <a class="btn navy" id="gcal" target="_blank" rel="noopener">Agregar a Google Calendar</a>
+    <button class="btn ghost" id="ics" type="button">Agregar al calendario (iPhone / otros)</button>
+    <a class="btn ghost" id="gcal2" target="_blank" rel="noopener">Recordarme reservar de nuevo en 30 días</a>
+    <p class="muted" style="margin:0;font-size:14px">Si no podés venir, cancelalo desde "Tus próximos turnos" hasta <span id="cancH"></span> horas antes, así el horario le queda libre a otro.</p>
+    <button class="btn ghost" id="back" type="button">Volver</button>
+  </section>
+</main>
+<div class="toast" id="toast" hidden></div>
+
+<script src="store.js"></script>
+<script>
+const S=Store; let st=S.load();
+const sel={srv:null,bar:"any",fecha:null,ini:null};
+const MINE="barberia_demo_mis_turnos";
+const mine=()=>{try{return JSON.parse(localStorage.getItem(MINE)||"[]")}catch(e){return []}};
+const setMine=a=>{try{localStorage.setItem(MINE,JSON.stringify(a))}catch(e){}};
+try{cNom.value=localStorage.getItem("bd_nom")||"";cTel.value=localStorage.getItem("bd_tel")||"";}catch(e){}
+function toast(t){toastEl.textContent=t;toastEl.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>toastEl.hidden=true,2200);}
+const toastEl=document.getElementById("toast");
+
+function header(){ nom.textContent=st.config.nombre; ini.textContent=st.config.nombre.replace(/^tu\s+/i,"")[0]||"B"; dir.textContent=st.config.direccion;
+  cancH.textContent=st.config.cancelHoras;
+  const d=st.demora; demora.hidden=!(d&&d.fecha===S.today()&&d.min>0); if(!demora.hidden) demora.textContent=`Hoy venimos con unos ${d.min} minutos de demora. ¡Gracias por la paciencia!`; }
+function renderSrv(){ srv.innerHTML=st.servicios.map(s=>`<button class="opt" type="button" data-id="${s.id}" aria-pressed="${sel.srv===s.id}"><b>${s.nombre}</b><small>${s.dur} min · ${S.fmt(s.precio)}</small></button>`).join(""); }
+function renderBar(){ bar.innerHTML=[{id:"any",nombre:"Cualquiera"},...st.barberos].map(b=>`<button class="opt" type="button" data-id="${b.id}" aria-pressed="${sel.bar===b.id}"><b>${b.nombre}</b><small>${b.id==="any"?"El primero libre":"Barbero"}</small></button>`).join(""); }
+function dur(){ return (st.servicios.find(s=>s.id===sel.srv)||{dur:45}).dur; }
+function freeFor(f){ return sel.bar==="any"?Object.keys(S.slotsAny(st,f,dur())).map(Number).sort((a,b)=>a-b):S.slots(st,f,sel.bar,dur()); }
+function renderDays(){
+  const out=[]; for(let i=0;i<14;i++){ const f=S.addDays(S.today(),i), d=new Date(f+"T12:00:00"), has=freeFor(f).length>0;
+    out.push(`<button class="day" type="button" data-f="${f}" aria-pressed="${sel.fecha===f}" ${has?"":"disabled"}><small>${i===0?"Hoy":d.toLocaleDateString("es-AR",{weekday:"short"}).replace(".","")}</small><b>${d.getDate()}</b><small>${d.toLocaleDateString("es-AR",{month:"short"}).replace(".","")}</small></button>`); }
+  days.innerHTML=out.join("");
+  if(!sel.fecha||days.querySelector(`[data-f="${sel.fecha}"]:disabled`)){ const first=days.querySelector(".day:not(:disabled)"); sel.fecha=first?first.dataset.f:null; days.querySelectorAll(".day").forEach(b=>b.setAttribute("aria-pressed",b.dataset.f===sel.fecha)); }
+}
+function renderTimes(){ const list=sel.fecha?freeFor(sel.fecha):[]; if(!list.includes(sel.ini)) sel.ini=null;
+  times.innerHTML=list.map(m=>`<button class="time" type="button" data-m="${m}" aria-pressed="${sel.ini===m}">${S.toHM(m)}</button>`).join(""); noTimes.hidden=list.length>0; }
+function renderAll(){ st=S.load(); header(); renderSrv(); renderBar(); renderDays(); renderTimes(); renderMine(); }
+
+srv.onclick=e=>{const b=e.target.closest(".opt"); if(!b)return; sel.srv=b.dataset.id; renderSrv(); renderDays(); renderTimes();};
+bar.onclick=e=>{const b=e.target.closest(".opt"); if(!b)return; sel.bar=b.dataset.id; renderBar(); renderDays(); renderTimes();};
+days.onclick=e=>{const b=e.target.closest(".day"); if(!b||b.disabled)return; sel.fecha=b.dataset.f; days.querySelectorAll(".day").forEach(x=>x.setAttribute("aria-pressed",x===b)); renderTimes();};
+times.onclick=e=>{const b=e.target.closest(".time"); if(!b)return; sel.ini=+b.dataset.m; times.querySelectorAll(".time").forEach(x=>x.setAttribute("aria-pressed",x===b));};
+
+go.onclick=()=>{
+  st=S.load();
+  if(!sel.srv) return err.textContent="Elegí un servicio.";
+  if(!sel.fecha||sel.ini===null) return err.textContent="Elegí día y horario.";
+  if(!cNom.value.trim()||cTel.value.replace(/\D/g,"").length<8) return err.textContent="Completá tu nombre y celular.";
+  let barId=sel.bar; if(barId==="any"){ const m=S.slotsAny(st,sel.fecha,dur()); barId=(m[sel.ini]||[])[0]; }
+  if(!barId||!S.slots(st,sel.fecha,barId,dur()).includes(sel.ini)){ err.textContent="Ese horario se acaba de ocupar. Elegí otro."; renderTimes(); return; }
+  err.textContent="";
+  const t={id:S.uid(),token:S.uid()+S.uid(),fecha:sel.fecha,ini:sel.ini,dur:dur(),barberoId:barId,servicioId:sel.srv,cliente:cNom.value.trim(),tel:cTel.value.trim(),estado:"reservado",origen:"web",creado:Date.now()};
+  st.turnos.push(t); S.save(st); setMine([...mine(),t.token]);
+  try{localStorage.setItem("bd_nom",t.cliente);localStorage.setItem("bd_tel",t.tel);}catch(e){}
+  showOk(t);
+};
+function showOk(t){
+  const s=st.servicios.find(x=>x.id===t.servicioId), b=st.barberos.find(x=>x.id===t.barberoId), fin=t.ini+t.dur, N=st.config.nombre, DIR=st.config.direccion;
+  ticket.innerHTML=`<dt>Servicio</dt><dd>${s.nombre} · ${S.fmt(s.precio)}</dd><dt>Con</dt><dd>${b.nombre}</dd><dt>Día</dt><dd>${S.fechaLarga(t.fecha)}</dd><dt>Hora</dt><dd>${S.toHM(t.ini)} a ${S.toHM(fin)}</dd><dt>Dónde</dt><dd>${DIR}</dd>`;
+  const stamp=(f,m)=>f.replace(/-/g,"")+"T"+S.toHM(m).replace(":","")+"00";
+  const g=(title,f,a,z,det)=>"https://calendar.google.com/calendar/render?"+new URLSearchParams({action:"TEMPLATE",text:title,dates:`${stamp(f,a)}/${stamp(f,z)}`,ctz:"America/Argentina/Buenos_Aires",details:det,location:DIR});
+  const det=`Tu turno en ${N} con ${b.nombre}. Si no podés venir, cancelalo desde la página así el horario queda libre.`;
+  gcal.href=g(`${s.nombre} en ${N}`,t.fecha,t.ini,fin,det);
+  const r=S.addDays(t.fecha,30); gcal2.href=g(`Reservar turno en ${N}`,r,600,615,`Ya pasó un mes desde tu último turno. Reservá acá: ${location.href.split("#")[0]}`);
+  if(/Android/i.test(navigator.userAgent)){ const ms=(f,m)=>new Date(`${f}T${S.toHM(m)}:00`).getTime(), e=encodeURIComponent;
+    acal.href=`intent://#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.item/event;S.title=${e(s.nombre+" en "+N)};S.eventLocation=${e(DIR)};S.description=${e(det)};l.beginTime=${ms(t.fecha,t.ini)};l.endTime=${ms(t.fecha,fin)};S.browser_fallback_url=${e(gcal.href)};end`;
+    acal.hidden=false; }
+  ics.onclick=()=>{ const ics=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Materia Print//Turnero//ES","BEGIN:VEVENT",`UID:${t.token}@turnero`,`DTSTAMP:${new Date().toISOString().replace(/[-:]/g,"").slice(0,15)}Z`,
+      `DTSTART:${stamp(t.fecha,t.ini)}`,`DTEND:${stamp(t.fecha,fin)}`,`SUMMARY:${s.nombre} en ${N}`,`LOCATION:${DIR.replace(/,/g,"\\,")}`,`DESCRIPTION:${det.replace(/,/g,"\\,")}`,
+      "BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:Mañana tenés turno","TRIGGER:-PT1D","END:VALARM","BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:En 2 horas tenés turno","TRIGGER:-PT2H","END:VALARM","END:VEVENT","END:VCALENDAR"].join("\r\n");
+    try{ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([ics],{type:"text/calendar"})); a.download="turno.ics"; document.body.appendChild(a); a.click(); a.remove(); toast("Si no se descargó, en esta vista de muestra está bloqueado: probalo en la página publicada."); }catch(e){ toast("No se pudo descargar el archivo."); } };
+  reserva.hidden=true; okView.hidden=false; scrollTo(0,0);
+}
+back.onclick=()=>{okView.hidden=true; reserva.hidden=false; sel.ini=null; renderAll();};
+
+function renderMine(){
+  const toks=mine(), list=st.turnos.filter(t=>toks.includes(t.token)&&t.estado==="reservado"&&(t.fecha>S.today()||(t.fecha===S.today()&&t.ini+t.dur>S.nowMin()))).sort((a,b)=>(a.fecha+a.ini).localeCompare(b.fecha+b.ini));
+  document.getElementById("mine").hidden=!list.length;
+  mineList.innerHTML=list.map(t=>{ const s=st.servicios.find(x=>x.id===t.servicioId), b=st.barberos.find(x=>x.id===t.barberoId);
+    const start=new Date(`${t.fecha}T${S.toHM(t.ini)}:00`).getTime(), canCancel=start-Date.now()>st.config.cancelHoras*3600e3;
+    return `<div class="t"><div><b>${S.fechaLarga(t.fecha)} · ${S.toHM(t.ini)}</b><div class="muted">${s.nombre} con ${b.nombre}</div></div>
+      ${canCancel?`<button class="btn ghost small" type="button" data-cancel="${t.token}">Cancelar turno</button>`:`<a class="btn wa small" target="_blank" rel="noopener" href="${S.waLink(st.config.whatsapp,`Hola, tengo turno ${S.fechaLarga(t.fecha)} a las ${S.toHM(t.ini)} y no voy a poder ir.`)}">Avisar por WhatsApp</a>`}</div>`; }).join("");
+}
+mineList.onclick=e=>{ const b=e.target.closest("[data-cancel]"); if(!b)return;
+  if(b.dataset.sure!=="1"){ b.dataset.sure="1"; b.textContent="Tocá de nuevo para confirmar"; return; }
+  st=S.load(); const t=st.turnos.find(x=>x.token===b.dataset.cancel); if(t){ t.estado="cancelado"; t.canceladoPor="cliente"; S.save(st); } toast("Turno cancelado. ¡Gracias por avisar!"); renderAll(); };
+addEventListener("storage",e=>{ if(e.key===S.KEY) renderAll(); });
+sel.srv=st.servicios[0].id; renderAll();
+</script>
+
+</body>
+</html>
