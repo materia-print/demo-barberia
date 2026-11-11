@@ -3,7 +3,7 @@
    comparten los turnos en el mismo dispositivo. En la versión real estas funciones
    pasan a leer y escribir en Supabase; el resto de la página no cambia. */
 (function(){
-const KEY="barberia_demo_v1";
+const KEY="barberia_demo_v2";
 const pad=n=>String(n).padStart(2,"0");
 const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const addDays=(s,n)=>{const d=new Date(s+"T12:00:00");d.setDate(d.getDate()+n);return ymd(d);};
@@ -17,9 +17,10 @@ function seed(){
   const t=today();
   const s={
     config:{nombre:"Tu Barbería",whatsapp:"5493543626280",direccion:"San Martín 123, Córdoba",cancelHoras:2,slotMin:15,
+      premio:{activo:true,cada:5,tipo:"gratis",pct:50},
       horarios:{0:[],1:[],2:[["09:00","13:00"],["15:00","20:00"]],3:[["09:00","13:00"],["15:00","20:00"]],4:[["09:00","13:00"],["15:00","20:00"]],5:[["09:00","13:00"],["15:00","20:00"]],6:[["09:00","14:00"]]}},
     barberos:[{id:"b1",nombre:"Martín"},{id:"b2",nombre:"Lucas"}],
-    servicios:[{id:"s1",nombre:"Corte de pelo",dur:45,precio:9000},{id:"s2",nombre:"Barba",dur:30,precio:6000},{id:"s3",nombre:"Corte + barba",dur:60,precio:13000},{id:"s4",nombre:"Corte niño",dur:30,precio:7000}],
+    servicios:[{id:"s1",nombre:"Corte de pelo",dur:45,precio:9000,sello:true},{id:"s2",nombre:"Barba",dur:30,precio:6000,sello:true},{id:"s3",nombre:"Corte + barba",dur:60,precio:13000,sello:true},{id:"s4",nombre:"Corte niño",dur:30,precio:7000,sello:true}],
     turnos:[],bloqueos:[],demora:null
   };
   const nombres=["Juan Pérez","Diego López","Tomás Gómez","Franco Díaz","Nicolás Ruiz","Matías Sosa","Agustín Paz","Bruno Ríos","Facundo Vera","Ezequiel Luna"];
@@ -29,20 +30,23 @@ function seed(){
   add(addDays(t,-45),"10:00","b1","s1",5,"atendido");add(addDays(t,-38),"16:00","b2","s3",6,"atendido");
   add(addDays(t,-33),"11:00","b1","s2",7,"atendido");add(addDays(t,-62),"17:00","b2","s1",8,"atendido");
   add(addDays(t,-12),"18:00","b1","s1",9,"atendido");
+  // tarjeta de sellos: Juan ya tiene 5 cortes (le toca el premio), Diego lleva 3
+  [-14,-29,-44,-59,-74].forEach(d=>add(addDays(t,d),"10:30","b1","s1",0,"atendido"));
+  [-21,-40,-66].forEach(d=>add(addDays(t,d),"16:30","b2","s3",1,"atendido"));
   // hoy y próximos días (solo si el día abre)
   const open=f=>(s.config.horarios[new Date(f+"T12:00:00").getDay()]||[]).length>0;
   let d=t,k=0; const plan=[["09:00","b1","s1",0],["10:00","b2","s3",1],["15:30","b1","s2",2],["17:00","b2","s1",3,"manual"],["18:00","b1","s3",4]];
   while(k<3){ if(open(d)){ plan.forEach(([hm,b,sv,i,o],j)=>{ if((j+k)%2===0||k===0) add(d,hm,b,sv,(i+k*2)%5,"reservado",o||"web"); }); k++; } d=addDays(d,1); }
   return s;
 }
-function load(){try{const v=localStorage.getItem(KEY); if(v) return JSON.parse(v);}catch(e){} const s=seed(); save(s); return s;}
+function load(){try{const v=localStorage.getItem(KEY); if(v){ const s=JSON.parse(v); if(!s.config.premio) s.config.premio={activo:true,cada:5,tipo:"gratis",pct:50}; return s; }}catch(e){} const s=seed(); save(s); return s;}
 function save(s){try{localStorage.setItem(KEY,JSON.stringify(s));}catch(e){}}
 function reset(){try{localStorage.removeItem(KEY);}catch(e){} return load();}
 
 /* horarios libres de un barbero en una fecha para un servicio */
 function slots(s,fecha,barberoId,dur){
   const day=new Date(fecha+"T12:00:00").getDay(), fr=s.config.horarios[day]||[], out=[];
-  const busy=[...s.turnos.filter(t=>t.fecha===fecha&&t.barberoId===barberoId&&t.estado==="reservado").map(t=>[t.ini,t.ini+t.dur]),
+  const busy=[...s.turnos.filter(t=>t.fecha===fecha&&t.barberoId===barberoId&&t.estado!=="cancelado").map(t=>[t.ini,t.ini+t.dur]),
               ...s.bloqueos.filter(b=>b.fecha===fecha&&(!b.barberoId||b.barberoId===barberoId)).map(b=>[b.ini,b.fin])];
   const min=fecha===today()?nowMin()+15:-1;
   fr.forEach(([a,b])=>{ for(let m=toMin(a);m+dur<=toMin(b);m+=s.config.slotMin){ if(m<min) continue; if(!busy.some(([x,y])=>m<y&&m+dur>x)) out.push(m);} });
@@ -50,7 +54,20 @@ function slots(s,fecha,barberoId,dur){
 }
 function slotsAny(s,fecha,dur){ const map={}; s.barberos.forEach(b=>slots(s,fecha,b.id,dur).forEach(m=>{(map[m]=map[m]||[]).push(b.id);})); return map; }
 function waLink(tel,msg){ let d=String(tel||"").replace(/\D/g,""); if(d.startsWith("0")) d=d.slice(1); if(!d.startsWith("54")) d="549"+d; return `https://wa.me/${d}?text=${encodeURIComponent(msg)}`; }
+/* tarjeta de sellos: cuenta los turnos atendidos del mismo celular; al usar el premio vuelve a cero */
+const telKey=t=>String(t||"").replace(/\D/g,"").slice(-10);
+const premioCfg=s=>Object.assign({activo:false,cada:5,tipo:"gratis",pct:50},s.config.premio||{});
+const premioTxt=s=>{const p=premioCfg(s);return p.tipo==="gratis"?"corte gratis":`${p.pct}% de descuento`;};
+function sellos(s,tel){
+  const p=premioCfg(s), k=telKey(tel); if(!p.activo||k.length<8) return null;
+  const suma=id=>{const v=s.servicios.find(x=>x.id===id);return !v||v.sello!==false;};
+  let n=0; s.turnos.filter(t=>t.estado==="atendido"&&telKey(t.tel)===k).sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.ini-b.ini)
+    .forEach(t=>{ if(t.premio) n=0; else if(suma(t.servicioId)) n++; });
+  return {n:Math.min(n,p.cada),cada:p.cada,falta:Math.max(0,p.cada-n),listo:n>=p.cada};
+}
+function precioCon(s,t,usaPremio){ const v=s.servicios.find(x=>x.id===t.servicioId)||{precio:0}, p=premioCfg(s);
+  if(!(usaPremio||t.premio)) return v.precio; return p.tipo==="gratis"?0:Math.round(v.precio*(100-p.pct)/100); }
 const fechaLarga=f=>new Date(f+"T12:00:00").toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"});
 const fmt=n=>"$"+n.toLocaleString("es-AR");
-window.Store={KEY,load,save,reset,slots,slotsAny,waLink,ymd,addDays,toMin,toHM,uid,today,nowMin,fechaLarga,fmt,pad};
+window.Store={KEY,telKey,premioCfg,premioTxt,sellos,precioCon,load,save,reset,slots,slotsAny,waLink,ymd,addDays,toMin,toHM,uid,today,nowMin,fechaLarga,fmt,pad};
 })();

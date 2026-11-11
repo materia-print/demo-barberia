@@ -1,6 +1,9 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Turnero Barbería Demo</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="app.css">
@@ -33,12 +36,14 @@
 .mine .t{display:flex;justify-content:space-between;align-items:center;gap:10px;border-top:1px solid var(--line);padding-top:10px;margin-top:10px;flex-wrap:wrap}
 .err{color:var(--accent);font-weight:600;min-height:1.4em}
 </style>
-
+</head>
+<body>
 <div class="demo">Demo de turnero · Probá reservar y después mirá el <a href="admin.html">panel del local</a> (PIN 1234)</div>
 <header class="top"><div class="pole"></div><div class="wrap"><div class="brand"><span class="mark" id="ini">B</span><b id="nom">Tu Barbería</b></div><span class="muted" id="dir"></span></div></header>
 
 <main class="wrap steps" id="reserva">
   <div class="banner" id="demora" hidden></div>
+  <div class="banner" id="promo" hidden style="border-color:var(--ok);background:color-mix(in srgb,var(--ok) 12%,var(--card))"></div>
   <section class="card mine" id="mine" hidden><h2 style="font-size:18px">Tus próximos turnos</h2><div id="mineList"></div></section>
 
   <section class="card"><div class="h"><span class="n">1</span><h2>Servicio</h2></div><div class="opts" id="srv"></div></section>
@@ -48,6 +53,7 @@
   <section class="card col"><div class="h"><span class="n">5</span><h2>Tus datos</h2></div>
     <div class="row2"><div><label class="l" for="cNom">Nombre</label><input class="field" id="cNom" autocomplete="name"></div>
     <div><label class="l" for="cTel">Celular</label><input class="field" id="cTel" inputmode="tel" autocomplete="tel" placeholder="351 555 1234"></div></div>
+    <div class="card col" id="tarjeta" hidden style="background:var(--bg)"></div>
     <div class="err" id="err" aria-live="polite"></div>
     <button class="btn primary" id="go" type="button">Reservar turno</button>
   </section>
@@ -94,7 +100,17 @@ function renderDays(){
 }
 function renderTimes(){ const list=sel.fecha?freeFor(sel.fecha):[]; if(!list.includes(sel.ini)) sel.ini=null;
   times.innerHTML=list.map(m=>`<button class="time" type="button" data-m="${m}" aria-pressed="${sel.ini===m}">${S.toHM(m)}</button>`).join(""); noTimes.hidden=list.length>0; }
-function renderAll(){ st=S.load(); header(); renderSrv(); renderBar(); renderDays(); renderTimes(); renderMine(); }
+function promoTxt(){ const p=S.premioCfg(st); return `Cada ${p.cada} cortes, el siguiente ${p.tipo==="gratis"?"es gratis":`tiene ${p.pct}% de descuento`}`; }
+function renderTarjeta(){
+  const p=S.premioCfg(st); promo.hidden=!p.activo; tarjeta.hidden=!p.activo; if(!p.activo) return;
+  promo.textContent=`🎁 Tarjeta de sellos: ${promoTxt().toLowerCase()}.`;
+  const sp=S.sellos(st,cTel.value);
+  if(!sp){ tarjeta.innerHTML=`<b>Tu tarjeta de sellos</b><span class="muted">Poné tu celular y te mostramos cuántos cortes llevás. ${promoTxt()}.</span>`; return; }
+  const dots=Array.from({length:sp.cada},(_,i)=>`<span class="sello ${i<sp.n?"on":""}">${i<sp.n?"✂":""}</span>`).join("")+`<span class="sello gift ${sp.listo?"on":""}">🎁</span>`;
+  tarjeta.innerHTML=`<b>Tu tarjeta de sellos</b><div class="sellos">${dots}</div><span class="${sp.listo?"":"muted"}" style="${sp.listo?"color:var(--ok);font-weight:700":""}">${sp.listo?`¡Completaste la tarjeta! Este turno: ${S.premioTxt(st)} 🎉`:`Llevás ${sp.n} de ${sp.cada}. Te ${sp.falta===1?"falta 1":`faltan ${sp.falta}`} para tu ${S.premioTxt(st)}.`}</span><small class="muted">El sello se suma cuando te atienden.</small>`;
+}
+function renderAll(){ st=S.load(); header(); renderSrv(); renderBar(); renderDays(); renderTimes(); renderMine(); renderTarjeta(); }
+cTel.addEventListener("input",renderTarjeta);
 
 srv.onclick=e=>{const b=e.target.closest(".opt"); if(!b)return; sel.srv=b.dataset.id; renderSrv(); renderDays(); renderTimes();};
 bar.onclick=e=>{const b=e.target.closest(".opt"); if(!b)return; sel.bar=b.dataset.id; renderBar(); renderDays(); renderTimes();};
@@ -116,7 +132,8 @@ go.onclick=()=>{
 };
 function showOk(t){
   const s=st.servicios.find(x=>x.id===t.servicioId), b=st.barberos.find(x=>x.id===t.barberoId), fin=t.ini+t.dur, N=st.config.nombre, DIR=st.config.direccion;
-  ticket.innerHTML=`<dt>Servicio</dt><dd>${s.nombre} · ${S.fmt(s.precio)}</dd><dt>Con</dt><dd>${b.nombre}</dd><dt>Día</dt><dd>${S.fechaLarga(t.fecha)}</dd><dt>Hora</dt><dd>${S.toHM(t.ini)} a ${S.toHM(fin)}</dd><dt>Dónde</dt><dd>${DIR}</dd>`;
+  const sp=S.sellos(st,t.tel), usa=sp&&sp.listo&&s.sello!==false, pr=S.precioCon(st,t,usa);
+  ticket.innerHTML=`<dt>Servicio</dt><dd>${s.nombre} · ${usa?`<s class="muted">${S.fmt(s.precio)}</s> ${pr?S.fmt(pr):"GRATIS"}`:S.fmt(s.precio)}</dd>${sp?`<dt>Sellos</dt><dd>${usa?`🎁 ¡Te toca ${S.premioTxt(st)}!`:`✂ ${sp.n} de ${sp.cada}${sp.falta?` · te ${sp.falta===1?"falta 1":`faltan ${sp.falta}`}`:""}`}</dd>`:""}<dt>Con</dt><dd>${b.nombre}</dd><dt>Día</dt><dd>${S.fechaLarga(t.fecha)}</dd><dt>Hora</dt><dd>${S.toHM(t.ini)} a ${S.toHM(fin)}</dd><dt>Dónde</dt><dd>${DIR}</dd>`;
   const stamp=(f,m)=>f.replace(/-/g,"")+"T"+S.toHM(m).replace(":","")+"00";
   const g=(title,f,a,z,det)=>"https://calendar.google.com/calendar/render?"+new URLSearchParams({action:"TEMPLATE",text:title,dates:`${stamp(f,a)}/${stamp(f,z)}`,ctz:"America/Argentina/Buenos_Aires",details:det,location:DIR});
   const det=`Tu turno en ${N} con ${b.nombre}. Si no podés venir, cancelalo desde la página así el horario queda libre.`;
@@ -148,4 +165,5 @@ addEventListener("storage",e=>{ if(e.key===S.KEY) renderAll(); });
 sel.srv=st.servicios[0].id; renderAll();
 </script>
 
-</body></html>
+</body>
+</html>

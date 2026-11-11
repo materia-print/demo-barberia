@@ -81,7 +81,7 @@ td input{width:100%;padding:6px;border:1px solid var(--line);background:var(--bg
     <div><label class="l" for="fSrv">Servicio</label><select class="field" id="fSrv"></select></div>
     <div><label class="l" for="fHora">Hora</label><select class="field" id="fHora"></select></div>
     <div><label class="l" for="fNom">Cliente</label><input class="field" id="fNom" placeholder="Nombre"></div>
-    <div><label class="l" for="fTel">Celular</label><input class="field" id="fTel" inputmode="tel" placeholder="Opcional"></div>
+    <div><label class="l" for="fTel">Celular</label><input class="field" id="fTel" inputmode="tel" placeholder="Opcional (suma sellos)"></div>
     <div style="display:flex;gap:6px"><button class="btn primary" id="fOk" type="button">Agregar turno</button><button class="btn ghost" id="fX" type="button">Cerrar</button></div>
   </div>
   <div class="cols" id="cols"></div>
@@ -117,8 +117,17 @@ td input{width:100%;padding:6px;border:1px solid var(--line);background:var(--bg
       <div><label class="l" for="cWa">WhatsApp (con 549)</label><input class="field" id="cWa"></div>
       <div><label class="l" for="cCan">Se puede cancelar hasta (horas antes)</label><input class="field" type="number" min="0" id="cCan"></div>
     </div></section>
+  <section class="card col"><h2 style="font-size:20px">Tarjeta de sellos</h2>
+    <p class="muted" style="margin:0">Como la tarjetita que se firma en cada corte, pero digital: cada turno marcado como <b>Atendido</b> suma un sello al celular del cliente.</p>
+    <label style="font-weight:600"><input type="checkbox" id="pAct"> Activar tarjeta de sellos</label>
+    <div class="form" style="background:none;padding:0" id="pBox">
+      <div><label class="l" for="pCada">Cantidad de cortes</label><input class="field" type="number" min="2" max="20" id="pCada"></div>
+      <div><label class="l" for="pTipo">Premio en el siguiente</label><select class="field" id="pTipo"><option value="gratis">Corte gratis</option><option value="descuento">Porcentaje de descuento</option></select></div>
+      <div id="pPctBox"><label class="l" for="pPct">Descuento (%)</label><input class="field" type="number" min="5" max="95" step="5" id="pPct"></div>
+    </div>
+    <div class="banner" id="pPrev" style="font-weight:600"></div></section>
   <section class="card col"><h2 style="font-size:20px">Servicios</h2>
-    <div class="tw"><table><thead><tr><th>Servicio</th><th>Minutos</th><th>Precio</th><th></th></tr></thead><tbody id="tSrv"></tbody></table></div>
+    <div class="tw"><table><thead><tr><th>Servicio</th><th>Minutos</th><th>Precio</th><th title="Si este servicio suma sello en la tarjeta">Suma sello</th><th></th></tr></thead><tbody id="tSrv"></tbody></table></div>
     <button class="btn ghost small" id="addSrv" type="button" style="align-self:flex-start">+ Agregar servicio</button></section>
   <section class="card col"><h2 style="font-size:20px">Barberos</h2>
     <div class="tw"><table><tbody id="tBar"></tbody></table></div>
@@ -155,7 +164,7 @@ $("prev").onclick=()=>{fecha=S.addDays(fecha,-1);renderAgenda();}; $("next").onc
 $("hoy").onclick=()=>{fecha=S.today();renderAgenda();}; $("aDate").onchange=e=>{if(e.target.value){fecha=e.target.value;renderAgenda();}};
 function freeRanges(bId){
   const day=new Date(fecha+"T12:00:00").getDay(), fr=st.config.horarios[day]||[], out=[], step=st.config.slotMin;
-  const busy=[...st.turnos.filter(t=>t.fecha===fecha&&t.barberoId===bId&&t.estado==="reservado").map(t=>[t.ini,t.ini+t.dur]),...st.bloqueos.filter(b=>b.fecha===fecha&&(!b.barberoId||b.barberoId===bId)).map(b=>[b.ini,b.fin])];
+  const busy=[...st.turnos.filter(t=>t.fecha===fecha&&t.barberoId===bId&&t.estado!=="cancelado").map(t=>[t.ini,t.ini+t.dur]),...st.bloqueos.filter(b=>b.fecha===fecha&&(!b.barberoId||b.barberoId===bId)).map(b=>[b.ini,b.fin])];
   fr.forEach(([a,b])=>{ let s=null; for(let m=S.toMin(a);m<S.toMin(b);m+=step){ const free=!busy.some(([x,y])=>m<y&&m+step>x); if(free&&s===null)s=m; if(!free&&s!==null){out.push([s,m]);s=null;} } if(s!==null)out.push([s,S.toMin(b)]); });
   return out;
 }
@@ -163,24 +172,25 @@ function renderAgenda(){
   $("aFecha").textContent=(fecha===S.today()?"Hoy · ":"")+S.fechaLarga(fecha); $("aDate").value=fecha;
   const dayT=st.turnos.filter(t=>t.fecha===fecha);
   const act=dayT.filter(t=>t.estado!=="cancelado"), web=act.filter(t=>t.origen==="web").length;
-  $("kpis").innerHTML=`<div class="kpi"><span class="muted">Turnos</span><b>${act.length}</b></div><div class="kpi"><span class="muted">Reservados online</span><b>${web}</b></div><div class="kpi"><span class="muted">Cancelados</span><b>${dayT.length-act.length}</b></div><div class="kpi"><span class="muted">A facturar</span><b>${S.fmt(act.reduce((a,t)=>a+srvOf(t.servicioId).precio,0))}</b></div>`;
+  $("kpis").innerHTML=`<div class="kpi"><span class="muted">Turnos</span><b>${act.length}</b></div><div class="kpi"><span class="muted">Reservados online</span><b>${web}</b></div><div class="kpi"><span class="muted">Cancelados</span><b>${dayT.length-act.length}</b></div><div class="kpi"><span class="muted">A facturar</span><b>${S.fmt(act.reduce((a,t)=>{ const sp=t.estado==="reservado"?S.sellos(st,t.tel):null; return a+S.precioCon(st,t,sp&&sp.listo); },0))}</b></div>`;
   const open=(st.config.horarios[new Date(fecha+"T12:00:00").getDay()]||[]).length>0;
   $("cols").innerHTML=!open?`<div class="card muted">Este día está cerrado según los horarios de atención.</div>`:st.barberos.map(b=>{
     const items=[...dayT.filter(t=>t.barberoId===b.id).map(t=>({m:t.ini,t})),...freeRanges(b.id).map(r=>({m:r[0],r})),...st.bloqueos.filter(x=>x.fecha===fecha&&(!x.barberoId||x.barberoId===b.id)).map(x=>({m:x.ini,bl:x}))].sort((x,y)=>x.m-y.m||(x.t?-1:1));
     return `<section class="card col"><h3>${b.nombre} <span class="muted" style="font-size:14px;font-family:var(--f-body);text-transform:none">${dayT.filter(t=>t.barberoId===b.id&&t.estado!=="cancelado").length} turnos</span></h3>${items.map(it=>{
       if(it.r) return `<div class="slot"><div class="hr">${S.toHM(it.r[0])}</div><button class="free" type="button" data-add="${b.id}" data-m="${it.r[0]}">Libre hasta ${S.toHM(it.r[1])} · + agregar turno</button></div>`;
       if(it.bl) return `<div class="slot"><div class="hr">${S.toHM(it.bl.ini)}<small>a ${S.toHM(it.bl.fin)}</small></div><div><b>Bloqueado</b><span class="muted">${it.bl.motivo||""}</span></div></div>`;
-      const t=it.t, s=srvOf(t.servicioId), cls=t.estado==="cancelado"?"canc":t.estado==="atendido"?"done":"";
-      return `<div class="slot ${cls}"><div class="hr">${S.toHM(t.ini)}<small>${t.dur} min</small></div><div><b>${t.cliente}</b><span class="muted">${s.nombre}</span>
-        <div class="acts"><span class="chip ${t.origen==="web"?"web":"manual"}">${t.origen==="web"?"ONLINE":"CARGADO A MANO"}</span>${t.estado==="cancelado"?`<span class="chip">CANCELADO${t.canceladoPor==="cliente"?" POR EL CLIENTE":""}</span>`:""}${t.estado==="atendido"?`<span class="chip ok">ATENDIDO</span>`:""}</div>
-        ${t.estado==="reservado"?`<div class="acts">${t.tel?`<a class="btn wa small" target="_blank" rel="noopener" href="${S.waLink(t.tel,`Hola ${t.cliente.split(" ")[0]}, te escribimos de ${st.config.nombre} por tu turno de ${S.fechaLarga(t.fecha)} a las ${S.toHM(t.ini)}.`)}">WhatsApp</a>`:""}<button class="btn ghost small" type="button" data-done="${t.id}">Atendido</button><button class="btn ghost small" type="button" data-cancel="${t.id}">Cancelar</button></div>`:""}</div></div>`;
+      const t=it.t, s=srvOf(t.servicioId), cls=t.estado==="cancelado"?"canc":t.estado==="atendido"?"done":"", sp=t.estado==="reservado"?S.sellos(st,t.tel):null, gift=sp&&sp.listo;
+      return `<div class="slot ${cls}"><div class="hr">${S.toHM(t.ini)}<small>${t.dur} min</small></div><div><b>${t.cliente}</b><span class="muted">${s.nombre}${sp&&!gift?` · ✂ ${sp.n}/${sp.cada} sellos`:""}</span>
+        <div class="acts"><span class="chip ${t.origen==="web"?"web":"manual"}">${t.origen==="web"?"ONLINE":"CARGADO A MANO"}</span>${t.estado==="cancelado"?`<span class="chip">CANCELADO${t.canceladoPor==="cliente"?" POR EL CLIENTE":""}</span>`:""}${t.estado==="atendido"?`<span class="chip ok">ATENDIDO</span>`:""}${gift?`<span class="chip gift">🎁 LE TOCA ${S.premioTxt(st).toUpperCase()}</span>`:""}${t.premio?`<span class="chip gift">🎁 USÓ EL PREMIO</span>`:""}</div>
+        ${t.estado==="reservado"?`<div class="acts">${t.tel?`<a class="btn wa small" target="_blank" rel="noopener" href="${S.waLink(t.tel,`Hola ${t.cliente.split(" ")[0]}, te escribimos de ${st.config.nombre} por tu turno de ${S.fechaLarga(t.fecha)} a las ${S.toHM(t.ini)}.`)}">WhatsApp</a>`:""}${gift?`<button class="btn primary small" type="button" data-done="${t.id}" data-premio="1">Atendido · usar premio</button>`:""}<button class="btn ghost small" type="button" data-done="${t.id}">Atendido</button><button class="btn ghost small" type="button" data-cancel="${t.id}">Cancelar</button></div>`:""}</div></div>`;
     }).join("")||`<p class="muted">Sin horarios.</p>`}</section>`; }).join("");
   renderDemora(); renderBloqueos();
 }
 $("cols").onclick=e=>{
   const a=e.target.closest("[data-add]"); if(a){ openAdd(a.dataset.add,+a.dataset.m); return; }
   const c=e.target.closest("[data-cancel]"); if(c){ if(c.dataset.sure!=="1"){c.dataset.sure="1";c.textContent="¿Seguro? Tocá de nuevo";return;} const t=st.turnos.find(x=>x.id===c.dataset.cancel); t.estado="cancelado"; t.canceladoPor="local"; save(); toast("Turno cancelado. El horario quedó libre."); return; }
-  const d=e.target.closest("[data-done]"); if(d){ st.turnos.find(x=>x.id===d.dataset.done).estado="atendido"; save(); }
+  const d=e.target.closest("[data-done]"); if(d){ const t=st.turnos.find(x=>x.id===d.dataset.done); t.estado="atendido"; if(d.dataset.premio) t.premio=true; save();
+    const sp=S.sellos(st,t.tel); toast(t.premio?"Premio usado. La tarjeta vuelve a cero.":sp?(sp.listo?`¡Completó la tarjeta! El próximo: ${S.premioTxt(st)}.`:`Sello sumado: ${sp.n} de ${sp.cada}.`):"Marcado como atendido."); }
 };
 function fillHoras(){ const bId=$("fBar").value, dur=srvOf($("fSrv").value).dur, list=S.slots(st,fecha,bId,dur).filter(m=>fecha!==S.today()||true);
   const keep=+$("fHora").dataset.want; $("fHora").innerHTML=list.map(m=>`<option value="${m}" ${m===keep?"selected":""}>${S.toHM(m)}</option>`).join("")||`<option value="">Sin lugar</option>`; }
@@ -227,23 +237,29 @@ function renderClientes(){
   let l=Object.values(map).filter(c=>c.ultima).sort((a,b)=>a.ultima.localeCompare(b.ultima));
   if($("soloVolver").checked) l=l.filter(c=>!c.proximo&&dias(c.ultima)>30);
   const link=location.href.replace(/admin\.html.*$/,"index.html");
-  $("cliList").innerHTML=l.map(c=>`<div class="it"><div><b>${c.nombre}</b><div class="muted">${c.visitas} visita${c.visitas>1?"s":""} · última hace ${dias(c.ultima)} días${c.proximo?` · próximo turno ${S.fechaLarga(c.proximo)}`:""}</div></div>
-    ${c.tel?`<a class="btn wa small" target="_blank" rel="noopener" href="${S.waLink(c.tel,`Hola ${c.nombre.split(" ")[0]}! Hace un tiempo que no te vemos por ${st.config.nombre}. Si querés, reservá tu próximo turno acá: ${link}`)}">Invitar a volver</a>`:""}</div>`).join("")||`<p class="muted">No hay clientes para mostrar.</p>`;
+  $("cliList").innerHTML=l.map(c=>`<div class="it"><div><b>${c.nombre}</b><div class="muted">${c.visitas} visita${c.visitas>1?"s":""} · última hace ${dias(c.ultima)} días${c.proximo?` · próximo turno ${S.fechaLarga(c.proximo)}`:""}</div>${(sp=>sp?`<div class="acts">${sp.listo?`<span class="chip gift">🎁 TIENE ${S.premioTxt(st).toUpperCase()}</span>`:`<span class="chip">✂ ${sp.n}/${sp.cada} SELLOS</span>`}</div>`:"")(S.sellos(st,c.tel))}</div>
+    ${c.tel?`<a class="btn wa small" target="_blank" rel="noopener" href="${S.waLink(c.tel,`Hola ${c.nombre.split(" ")[0]}! Hace un tiempo que no te vemos por ${st.config.nombre}.${(S.sellos(st,c.tel)||{}).listo?` ¡Y tenés tu ${S.premioTxt(st)} esperándote!`:""} Si querés, reservá tu próximo turno acá: ${link}`)}">Invitar a volver</a>`:""}</div>`).join("")||`<p class="muted">No hay clientes para mostrar.</p>`;
 }
 $("soloVolver").onchange=renderClientes;
 
 /* CONFIG */
 const DIAS=["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
 function renderConfig(){ const c=st.config; $("cNom").value=c.nombre; $("cDir").value=c.direccion; $("cWa").value=c.whatsapp; $("cCan").value=c.cancelHoras;
-  $("tSrv").innerHTML=st.servicios.map(s=>`<tr data-id="${s.id}"><td><input value="${s.nombre}" data-k="nombre"></td><td><input type="number" min="5" step="5" value="${s.dur}" data-k="dur"></td><td><input type="number" min="0" step="500" value="${s.precio}" data-k="precio"></td><td><button class="btn ghost small" type="button" data-del="${s.id}">Quitar</button></td></tr>`).join("");
+  const p=S.premioCfg(st); $("pAct").checked=p.activo; $("pCada").value=p.cada; $("pTipo").value=p.tipo; $("pPct").value=p.pct; premioPrev();
+  $("tSrv").innerHTML=st.servicios.map(s=>`<tr data-id="${s.id}"><td><input value="${s.nombre}" data-k="nombre"></td><td><input type="number" min="5" step="5" value="${s.dur}" data-k="dur"></td><td><input type="number" min="0" step="500" value="${s.precio}" data-k="precio"></td><td style="text-align:center"><input type="checkbox" data-k="sello" ${s.sello!==false?"checked":""} style="width:auto" aria-label="Suma sello"></td><td><button class="btn ghost small" type="button" data-del="${s.id}">Quitar</button></td></tr>`).join("");
   $("tBar").innerHTML=st.barberos.map(b=>`<tr data-id="${b.id}"><td><input value="${b.nombre}" data-k="nombre"></td><td style="width:1%"><button class="btn ghost small" type="button" data-delb="${b.id}">Quitar</button></td></tr>`).join("");
   $("tHor").innerHTML=[1,2,3,4,5,6,0].map(d=>{const f=c.horarios[d]||[],v=(i,j)=>(f[i]||[])[j]||""; return `<tr data-d="${d}"><td>${DIAS[d]}</td>${[0,1].map(i=>[0,1].map(j=>`<td><input type="time" value="${v(i,j)}"></td>`).join("")).join("")}</tr>`;}).join(""); }
+function premioPrev(){ const on=$("pAct").checked, n=+$("pCada").value||5, gr=$("pTipo").value==="gratis";
+  $("pBox").hidden=!on; $("pPctBox").hidden=gr;
+  $("pPrev").textContent=on?`Así lo ve el cliente: "Cada ${n} cortes, el siguiente ${gr?"es gratis":`tiene ${+$("pPct").value||50}% de descuento`}".`:"La tarjeta de sellos está apagada: no se muestra en la página ni en la agenda."; }
+["pAct","pCada","pTipo","pPct"].forEach(id=>$(id).addEventListener("input",premioPrev));
 $("tSrv").onclick=e=>{const b=e.target.closest("[data-del]"); if(b){ collect(); st.servicios=st.servicios.filter(s=>s.id!==b.dataset.del); renderConfig(); }};
 $("tBar").onclick=e=>{const b=e.target.closest("[data-delb]"); if(b){ if(st.barberos.length<2) return toast("Tiene que quedar al menos un barbero."); collect(); st.barberos=st.barberos.filter(x=>x.id!==b.dataset.delb); renderConfig(); }};
 $("addSrv").onclick=()=>{ collect(); st.servicios.push({id:S.uid(),nombre:"Nuevo servicio",dur:30,precio:0}); renderConfig(); };
 $("addBar").onclick=()=>{ collect(); st.barberos.push({id:S.uid(),nombre:"Nuevo barbero"}); renderConfig(); };
 function collect(){ const c=st.config; c.nombre=$("cNom").value.trim()||"Tu Barbería"; c.direccion=$("cDir").value.trim(); c.whatsapp=$("cWa").value.trim(); c.cancelHoras=Math.max(0,+$("cCan").value||0);
-  $("tSrv").querySelectorAll("tr").forEach(r=>{const s=st.servicios.find(x=>x.id===r.dataset.id); r.querySelectorAll("input").forEach(i=>s[i.dataset.k]=i.type==="number"?+i.value:i.value.trim());});
+  $("tSrv").querySelectorAll("tr").forEach(r=>{const s=st.servicios.find(x=>x.id===r.dataset.id); r.querySelectorAll("input").forEach(i=>s[i.dataset.k]=i.type==="checkbox"?i.checked:i.type==="number"?+i.value:i.value.trim());});
+  c.premio={activo:$("pAct").checked,cada:Math.min(20,Math.max(2,+$("pCada").value||5)),tipo:$("pTipo").value,pct:Math.min(95,Math.max(5,+$("pPct").value||50))};
   $("tBar").querySelectorAll("tr").forEach(r=>{st.barberos.find(x=>x.id===r.dataset.id).nombre=r.querySelector("input").value.trim();});
   $("tHor").querySelectorAll("tr").forEach(r=>{const v=[...r.querySelectorAll("input")].map(i=>i.value); c.horarios[r.dataset.d]=[[v[0],v[1]],[v[2],v[3]]].filter(([a,b])=>a&&b&&b>a);}); }
 $("guardar").onclick=()=>{ collect(); save(); toast("Cambios guardados. La página de reservas ya los usa."); };
