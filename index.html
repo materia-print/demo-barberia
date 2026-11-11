@@ -1,9 +1,6 @@
-<!doctype html>
-<html lang="es">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>Turnero Barbería Demo</title>
+<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="app.css">
@@ -36,8 +33,7 @@
 .mine .t{display:flex;justify-content:space-between;align-items:center;gap:10px;border-top:1px solid var(--line);padding-top:10px;margin-top:10px;flex-wrap:wrap}
 .err{color:var(--accent);font-weight:600;min-height:1.4em}
 </style>
-</head>
-<body>
+
 <div class="demo">Demo de turnero · Probá reservar y después mirá el <a href="admin.html">panel del local</a> (PIN 1234)</div>
 <header class="top"><div class="pole"></div><div class="wrap"><div class="brand"><span class="mark" id="ini">B</span><b id="nom">Tu Barbería</b></div><span class="muted" id="dir"></span></div></header>
 
@@ -152,5 +148,4 @@ addEventListener("storage",e=>{ if(e.key===S.KEY) renderAll(); });
 sel.srv=st.servicios[0].id; renderAll();
 </script>
 
-</body>
-</html>
+</body></html>
